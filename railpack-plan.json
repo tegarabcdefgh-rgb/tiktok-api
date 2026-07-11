@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "build": {
+    "commands": [
+      "apt-get update",
+      "apt-get install -y python3 python3-pip",
+      "pip3 install yt-dlp"
+    ]
+  },
+  "deploy": {
+    "aptPackages": ["ffmpeg"]
+  }
+}
