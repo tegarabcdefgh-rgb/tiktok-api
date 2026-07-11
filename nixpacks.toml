@@ -1,8 +1,0 @@
-[phases.setup]
-# "..." penting: ini menambahkan yt-dlp & ffmpeg ke package Node.js yang
-# sudah otomatis terdeteksi, BUKAN menimpanya. Tanpa "...", instalasi
-# Node.js bawaan bisa ketimpa/hilang.
-nixPkgs = ["...", "yt-dlp", "ffmpeg"]
-
-[start]
-cmd = "node server.js"

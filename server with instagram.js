@@ -10,9 +10,21 @@ const execPromise = promisify(exec);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Prefer local `yt-dlp` from `node_modules/.bin`, fallback to global `yt-dlp`
-const localYtdlp = path.join(__dirname, '..', 'node_modules', '.bin', 'yt-dlp');
-const ytdlp = fs.existsSync(localYtdlp) ? localYtdlp : 'yt-dlp';
+// Urutan pencarian binary yt-dlp:
+// 1. /app/bin/yt-dlp -> di-download otomatis oleh Railpack lewat railpack.json
+//    (binary resmi Linux, self-contained, tidak butuh Python terpisah)
+// 2. node_modules/.bin/yt-dlp -> kalau ada package npm yang menyediakannya
+// 3. fallback ke 'yt-dlp' global di PATH (untuk dev lokal kalau sudah terinstall manual)
+const railpackYtdlp = path.join(__dirname, 'bin', 'yt-dlp');
+const localYtdlp = path.join(__dirname, 'node_modules', '.bin', 'yt-dlp');
+
+let ytdlp = 'yt-dlp';
+if (fs.existsSync(railpackYtdlp)) {
+    ytdlp = railpackYtdlp;
+} else if (fs.existsSync(localYtdlp)) {
+    ytdlp = localYtdlp;
+}
+console.log('Menggunakan yt-dlp dari:', ytdlp);
 
 app.use(cors());
 app.use(express.json());
