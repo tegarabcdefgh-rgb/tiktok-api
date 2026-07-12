@@ -3,3 +3,4 @@ node_modules/
 tmp/
 yt-dlp.exe
 *.exe
+cookies.txt

@@ -10,17 +10,21 @@ const execPromise = promisify(exec);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// yt-dlp sekarang disediakan otomatis lewat field "packages" di railpack.json
-// (Mise registry), sehingga sudah tersedia di PATH container Railway.
-// Tidak perlu lagi path manual ke node_modules/.bin atau /app/bin.
+// ---------- KONFIGURASI yt-dlp ----------
 const ytdlp = 'yt-dlp';
 console.log('Menggunakan yt-dlp dari PATH');
+
+// ---------- DUKUNGAN COOKIES UNTUK INSTAGRAM ----------
+const COOKIES_PATH = '/app/cookies.txt';
+const useCookies = fs.existsSync(COOKIES_PATH);
+const cookieOption = useCookies ? `--cookies ${COOKIES_PATH}` : '';
+console.log(`Instagram cookies: ${useCookies ? '✅ tersedia' : '❌ tidak ada (beberapa konten mungkin gagal)'}`);
 
 app.use(cors());
 app.use(express.json());
 
 // ─────────────────────────────────────────────────────────────────────────
-// TIKTOK
+// TIKTOK (tetap sama, tanpa cookies)
 // ─────────────────────────────────────────────────────────────────────────
 
 app.get('/api/download-tiktok', async (req, res) => {
@@ -47,7 +51,7 @@ app.get('/api/download-tiktok', async (req, res) => {
             description: data.description,
         });
     } catch (error) {
-        console.error('Error metadata:', error.message);
+        console.error('Error metadata TikTok:', error.message);
         res.status(500).json({ error: 'Gagal memproses video TikTok', details: error.message });
     }
 });
@@ -88,10 +92,7 @@ app.get('/api/download-video', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// INSTAGRAM (baru)
-// yt-dlp mendukung Instagram (reels, video post, foto post/carousel item
-// pertama). Endpointnya sengaja dibuat mirip pola TikTok di atas supaya
-// gampang dipakai bareng: 1) ambil metadata dulu, 2) baru unduh media.
+// INSTAGRAM (dengan cookies)
 // ─────────────────────────────────────────────────────────────────────────
 
 function isInstagramUrl(url) {
@@ -108,11 +109,12 @@ app.get('/api/download-instagram', async (req, res) => {
         return res.status(400).json({ error: 'URL tidak valid. Harus dari instagram.com' });
     }
     try {
-        const { stdout } = await execPromise(`${ytdlp} -j --no-warnings "${mediaUrl}"`);
+        // 🔥 GABUNGKAN opsi cookies ke perintah
+        const command = `${ytdlp} ${cookieOption} -j --no-warnings "${mediaUrl}"`;
+        console.log(`[IG Metadata] Executing: ${command}`); // opsional, untuk debugging
+        const { stdout } = await execPromise(command);
         const data = JSON.parse(stdout);
 
-        // Kalau kontennya foto (bukan video), yt-dlp biasanya menandai ext
-        // sebagai jpg/png/webp dan tidak punya properti video khas.
         const isImage = ['jpg', 'jpeg', 'png', 'webp'].includes((data.ext || '').toLowerCase());
 
         res.json({
@@ -128,7 +130,14 @@ app.get('/api/download-instagram', async (req, res) => {
         });
     } catch (error) {
         console.error('Error metadata IG:', error.message);
-        res.status(500).json({ error: 'Gagal memproses postingan Instagram', details: error.message });
+        // Beri pesan yang lebih jelas jika cookies bermasalah
+        let detail = error.message;
+        if (error.message.includes('HTTP Error 404') || error.message.includes('Not Found')) {
+            detail = 'Postingan tidak ditemukan. Mungkin URL salah atau konten bersifat privat.';
+        } else if (error.message.includes('Login Required') || error.message.includes('cookie')) {
+            detail = 'Instagram memerlukan login. Pastikan file cookies.txt valid dan belum kadaluarsa.';
+        }
+        res.status(500).json({ error: 'Gagal memproses postingan Instagram', details: detail });
     }
 });
 
@@ -138,12 +147,13 @@ app.get('/api/download-instagram-media', (req, res) => {
     if (!mediaUrl) return res.status(400).json({ error: 'URL required' });
     if (!isInstagramUrl(mediaUrl)) return res.status(400).json({ error: 'Invalid Instagram URL' });
 
+    // 🔥 TAMBAHKAN cookies ke argumen spawn
     const args = ['-f', 'best', '-o', '-', mediaUrl];
+    if (useCookies) {
+        args.unshift('--cookies', COOKIES_PATH);
+    }
     const ytdlpProc = spawn(ytdlp, args, { stdio: ['ignore', 'pipe', 'pipe'] });
 
-    // Content-Type di-set generik dulu; kalau perlu pembeda gambar/video
-    // yang lebih presisi, bot bisa memakai info dari /api/download-instagram
-    // (media_type) sebelum memutuskan cara mengirim ke WhatsApp.
     const filename = `instagram_${uuidv4()}`;
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 

@@ -13,7 +13,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
+
 COPY . .
+COPY cookies.txt /app/cookies.txt 
 
 RUN rm -f yt-dlp.exe   # opsional, hapus file Windows
 
